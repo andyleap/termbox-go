@@ -230,6 +230,10 @@ func send_char(x, y int, ch rune) {
 	outbuf.Write(buf[:n])
 }
 
+func SendRaw(buf []byte) {
+	outbuf.Write(buf)
+}
+
 func flush() error {
 	_, err := io.Copy(out, &outbuf)
 	outbuf.Reset()
@@ -418,7 +422,20 @@ func parse_escape_sequence(event *Event, buf []byte) (int, bool) {
 	}
 
 	// if none of the keys match, let's try mouse seqences
-	return parse_mouse_event(event, bufstr)
+	n, ok := parse_mouse_event(event, bufstr)
+	if ok {
+		return n, ok
+	}
+	if bufstr[0:2] == "\033[" {
+		for i, c := range bufstr[2:] {
+			if c >= '\x40' && c <= '\x7e' {
+				event.Type = EventEscape
+				event.Raw = bufstr[0 : 2+i]
+				return 2 + i, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func extract_raw_event(data []byte, event *Event) bool {
@@ -448,7 +465,15 @@ func extract_event(inbuf []byte, event *Event) bool {
 
 	if inbuf[0] == '\033' {
 		// possible escape sequence
-		if n, ok := parse_escape_sequence(event, inbuf); n != 0 {
+		n, ok := parse_escape_sequence(event, inbuf)
+
+		if !ok {
+			if len(inbuf) > 1 && inbuf[1] == '[' {
+				return false
+			}
+		}
+
+		if n != 0 {
 			event.N = n
 			return ok
 		}
