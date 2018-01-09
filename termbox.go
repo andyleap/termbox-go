@@ -426,7 +426,7 @@ func parse_escape_sequence(event *Event, buf []byte) (int, bool) {
 	if ok {
 		return n, ok
 	}
-	if bufstr[0:2] == "\033[" {
+	if len(bufstr) > 1 && bufstr[0:2] == "\033[" {
 		for i, c := range bufstr[2:] {
 			if c >= '\x40' && c <= '\x7e' {
 				event.Type = EventEscape
