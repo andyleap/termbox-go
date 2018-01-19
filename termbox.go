@@ -411,6 +411,37 @@ func parse_mouse_event(event *Event, buf string) (int, bool) {
 	return 0, false
 }
 
+func parse_cursor_sequence(event *Event, seq string) {
+	if len(seq) > 4 && seq[0:4] == "\x1b[1;" {
+		if len(seq) == 6 {
+			switch seq[4] {
+			case '2':
+				event.Mod = ModShift
+			case '3':
+				event.Mod = ModAlt
+			case '5':
+				event.Mod = ModCtrl
+			case '6':
+				event.Mod = ModCtrl | ModShift
+			case '9':
+				event.Mod = ModMeta
+			}
+			switch seq[5] {
+			case 'A':
+				event.Key = KeyArrowUp
+			case 'B':
+				event.Key = KeyArrowDown
+			case 'C':
+				event.Key = KeyArrowRight
+			case 'D':
+				event.Key = KeyArrowLeft
+			}
+			event.Type = EventKey
+		}
+	}
+
+}
+
 func parse_escape_sequence(event *Event, buf []byte) (int, bool) {
 	bufstr := string(buf)
 	for i, key := range keys {
@@ -426,12 +457,12 @@ func parse_escape_sequence(event *Event, buf []byte) (int, bool) {
 	if ok {
 		return n, ok
 	}
-	if len(bufstr) > 1 && bufstr[0:2] == "\033[" {
+	if len(bufstr) > 1 && bufstr[0:2] == "\x1b[" {
 		for i, c := range bufstr[2:] {
 			if c >= '\x40' && c <= '\x7e' {
 				event.Type = EventEscape
-				event.Raw = bufstr[0 : 2+i]
-				return 2 + i, true
+				parse_cursor_sequence(event, bufstr[0:3+i])
+				return 3 + i, true
 			}
 		}
 	}
@@ -458,6 +489,9 @@ func extract_raw_event(data []byte, event *Event) bool {
 }
 
 func extract_event(inbuf []byte, event *Event) bool {
+	defer func() {
+		event.Raw = string(inbuf[:event.N])
+	}()
 	if len(inbuf) == 0 {
 		event.N = 0
 		return false
